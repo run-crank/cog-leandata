@@ -1,13 +1,35 @@
+##
+# The following Circle CI configuration will do the following:
+#
+# - On every branch except master:
+#   - Runs npm run lint and npm test
+#   - Builds the Cog docker image and attempts to install/uninstall it
+# - On master branch commits:
+#   - Run the above lint/tests
+#   - Build the docker image, tag it with dev-v[N], and push the tag
+# - On every git tag beginning with `vX.Y.Z`:
+#   - Build the docker image
+#   - Tag the image `latest` and `X.Y.Z` and push both tags
+#
+# In order for Docker publishing to work, you will need to do the following:
+#
+# - Set up a Circle CI context called `docker-creds-to-publish-cogs`
+# - In this context, add `DOCKERHUB_USERNAME` and `DOCKERHUB_PASS` environment
+#   variables, using credentials that can push to `automatoninc/leandata`
+#
+# @see https://circleci.com/docs/2.0/contexts/
+##
+
 version: 2.1
 executors:
   docker-publisher:
     environment:
-      IMAGE_NAME: automatoninc/salesforce
+      IMAGE_NAME: automatoninc/leandata
     docker:
       - image: circleci/buildpack-deps:stretch
   docker-user:
     environment:
-      IMAGE_NAME: automatoninc/salesforce
+      IMAGE_NAME: automatoninc/leandata
     machine:
       image: circleci/classic:latest
 
@@ -77,26 +99,6 @@ jobs:
       - run:
           name: Uninstall Cog
           command: crank cog:uninstall $IMAGE_NAME --force
-
-  run-test-scenarios:
-    executor: docker-user
-    steps:
-      - checkout
-      - attach_workspace:
-          at: /tmp/workspace
-      - run:
-          name: Load archived Docker image
-          command: docker load -i /tmp/workspace/image.tar
-      - run:
-          name: Install Crank and required Cogs
-          command: |
-            curl -s https://get.crank.run/install.sh | sh
-            docker tag $IMAGE_NAME:latest $IMAGE_NAME:local-test
-            crank cog:install $IMAGE_NAME:local-test
-            crank cog:install automatoninc/web:0.3.1
-      - run:
-          name: Run all test scenarios
-          command: crank run ./test/scenarios
 
   publish-dev:
     executor: docker-publisher
@@ -172,9 +174,9 @@ workflows:
           filters:
             branches:
               only: master
-      - run-test-scenarios:
-          context: salesforce-cog-sandbox-env-credentials
+      - install-built-cog:
           requires:
+            - test
             - build
           filters:
             branches:
@@ -183,7 +185,7 @@ workflows:
           context: docker-creds-to-publish-cogs
           requires:
             - test
-            - run-test-scenarios
+            - install-built-cog
           filters:
             branches:
               only: master
