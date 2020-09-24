@@ -38,11 +38,26 @@ describe('Cog:GetManifest', () => {
         return field.toObject();
       });
 
-      // Useragent auth field
-      const ua: any = authFields.filter(a => a.key === 'userAgent')[0];
-      expect(ua.type).to.equal(FieldDefinition.Type.STRING);
-      expect(ua.optionality).to.equal(FieldDefinition.Optionality.REQUIRED);
-      expect(!!ua.help).to.equal(true);
+      // Auth field
+      const instanceUrl: any = authFields.filter(a => a.key === 'instanceUrl')[0];
+      expect(instanceUrl.type).to.equal(FieldDefinition.Type.URL);
+      expect(instanceUrl.optionality).to.equal(FieldDefinition.Optionality.REQUIRED);
+
+      const clientId: any = authFields.filter(a => a.key === 'clientId')[0];
+      expect(clientId.type).to.equal(FieldDefinition.Type.STRING);
+      expect(clientId.optionality).to.equal(FieldDefinition.Optionality.REQUIRED);
+
+      const clientSecret: any = authFields.filter(a => a.key === 'clientSecret')[0];
+      expect(clientSecret.type).to.equal(FieldDefinition.Type.STRING);
+      expect(clientSecret.optionality).to.equal(FieldDefinition.Optionality.REQUIRED);
+
+      const username: any = authFields.filter(a => a.key === 'username')[0];
+      expect(username.type).to.equal(FieldDefinition.Type.STRING);
+      expect(username.optionality).to.equal(FieldDefinition.Optionality.REQUIRED);
+
+      const password: any = authFields.filter(a => a.key === 'password')[0];
+      expect(password.type).to.equal(FieldDefinition.Type.STRING);
+      expect(password.optionality).to.equal(FieldDefinition.Optionality.REQUIRED);
 
       done();
     });
