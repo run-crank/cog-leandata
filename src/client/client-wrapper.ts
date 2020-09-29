@@ -1,64 +1,93 @@
+import { LeadAwareMixin } from './mixins/lead-aware';
 import * as grpc from 'grpc';
-import * as needle from 'needle';
+import * as jsforce from 'jsforce';
 import { Field } from '../core/base-step';
 import { FieldDefinition } from '../proto/cog_pb';
-import { UserAwareMixin } from './mixins';
 
-/**
- * This is a wrapper class around the API client for your Cog. An instance of
- * this class is passed to the constructor of each of your steps, and can be
- * accessed on each step as this.client.
- */
 class ClientWrapper {
 
-  /**
-   * This is an array of field definitions, each corresponding to a field that
-   * your API client requires for authentication. Depending on the underlying
-   * system, this could include bearer tokens, basic auth details, endpoints,
-   * etc.
-   *
-   * If your Cog does not require authentication, set this to an empty array.
-   */
+  // For now, only support Username and Password Login (OAuth2 Resource Owner Password Credential)
   public static expectedAuthFields: Field[] = [{
-    field: 'userAgent',
+    field: 'instanceUrl',
+    type: FieldDefinition.Type.URL,
+    description: 'Login/instance URL (e.g. https://na1.salesforce.com)',
+  }, {
+    field: 'clientId',
     type: FieldDefinition.Type.STRING,
-    description: 'User Agent String',
-    help: 'This is for demonstration purposes only. In an actual Cog, you would use this field to describe how to find this auth field in the underlying system.',
+    description: 'OAuth2 Client ID',
+  }, {
+    field: 'clientSecret',
+    type: FieldDefinition.Type.STRING,
+    description: 'OAuth2 Client Secret',
+  }, {
+    field: 'username',
+    type: FieldDefinition.Type.STRING,
+    description: 'Username',
+  }, {
+    field: 'password',
+    type: FieldDefinition.Type.STRING,
+    description: 'Password',
   }];
 
-  /**
-   * Private instance of the wrapped API client. You will almost certainly want
-   * to swap this out for an API client specific to your Cog's needs.
-   */
-  public client: any;
+  public client: jsforce.Connection;
+  public clientReady: Promise<boolean>;
 
-  /**
-   * Constructs an instance of the ClientWwrapper, authenticating the wrapped
-   * client in the process.
-   *
-   * @param auth - An instance of GRPC Metadata for a given RunStep or RunSteps
-   *   call. Will be populated with authentication metadata according to the
-   *   expectedAuthFields array defined above.
-   *
-   * @param clientConstructor - An optional parameter Used only as a means to
-   *   simplify automated testing. Should default to the class/constructor of
-   *   the underlying/wrapped API client.
-   */
-  constructor (auth: grpc.Metadata, clientConstructor = needle) {
-    // Call auth.get() for any field defined in the static expectedAuthFields
-    // array here. The argument passed to get() should match the "field" prop
-    // declared on the definition object above.
-    const uaString: string = auth.get('userAgent').toString();
-    this.client = clientConstructor;
+  constructor (auth: grpc.Metadata, clientConstructor = jsforce) {
+    // Support non-UN/PW OAuth under the hood.
+    if (auth.get('refreshToken').toString() && auth.get('accessToken').toString()) {
+      this.client = new clientConstructor.Connection({
+        oauth2: {
+          clientId: auth.get('clientId').toString(),
+          clientSecret: auth.get('clientSecret').toString(),
+        },
+        instanceUrl: auth.get('instanceUrl').toString(),
+        accessToken: auth.get('accessToken').toString(),
+        refreshToken: auth.get('refreshToken').toString(),
+      });
+      this.clientReady = new Promise((resolve, reject) => {
+        this.client.oauth2.refreshToken(auth.get('refreshToken').toString(), (err, results) => {
+          if (err) {
+            return reject(`Auth Error: ${err.toString()}`);
+          }
+          this.client.accessToken = results.access_token;
+          resolve(true);
+        });
+      });
+      return;
+    }
 
-    // Authenticate the underlying client here.
-    this.client.defaults({ user_agent: uaString });
+    // User/Password OAuth2 Resource Owner Credential Flow
+    if (auth.get('clientSecret') && auth.get('password')) {
+      // Construct the connection.
+      this.client = new clientConstructor.Connection({
+        oauth2: {
+          loginUrl: auth.get('instanceUrl').toString(),
+          clientId: auth.get('clientId').toString(),
+          clientSecret: auth.get('clientSecret').toString(),
+        },
+      });
+
+      // Wraps the async login function in a way that ensures steps can wait
+      // until the client is actually authenticated.
+      this.clientReady = new Promise((resolve, reject) => {
+        // Login using the username/password.
+        this.client.login(
+          auth.get('username').toString(),
+          auth.get('password').toString(),
+          (err, userInfo) => {
+            if (err) {
+              return reject(`Auth Error: ${err.toString()}`);
+            }
+            resolve(true);
+          },
+        );
+      });
+    }
   }
-
 }
 
-interface ClientWrapper extends UserAwareMixin {}
-applyMixins(ClientWrapper, [UserAwareMixin]);
+interface ClientWrapper extends LeadAwareMixin {}
+applyMixins(ClientWrapper, [LeadAwareMixin]);
 
 function applyMixins(derivedCtor: any, baseCtors: any[]) {
   baseCtors.forEach((baseCtor) => {
