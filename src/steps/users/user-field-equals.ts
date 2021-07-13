@@ -17,7 +17,7 @@ export class UserFieldEqualsStep extends BaseStep implements StepInterface {
 
   protected stepType: StepDefinition.Type = StepDefinition.Type.VALIDATION;
 
-  protected stepExpression: string = 'the (?<field>.+) field on JSON Placeholder user (?<email>.+) should (?<operator>be set|not be set|be less than|be greater than|be one of|be|contain|not be one of|not be|not contain) ?(?<expectation>.+)?';
+  protected stepExpression: string = 'the (?<field>.+) field on JSON Placeholder user (?<email>.+) should (?<operator>be set|not be set|be less than|be greater than|be one of|be|contain|not be one of|not be|not contain|match|not match) ?(?<expectation>.+)?';
 
   protected stepHelp: string = "This step attempts to find a user on JSON Placeholder and check a field's value on that user.";
 
